@@ -9,6 +9,7 @@ import requests
 import json
 import re
 import os
+import uvicorn
 
 app = FastAPI(
     title="Plastic Classification API",
@@ -26,7 +27,7 @@ app.add_middleware(
 )
 
 # Load model locally (no Google Drive fallback)
-MODEL_PATH = "../models/1.keras"
+MODEL_PATH = "plastic.h5"
 if not os.path.exists(MODEL_PATH):
     raise RuntimeError(f"Model file not found at {MODEL_PATH}")
 
@@ -154,11 +155,7 @@ async def get_insights(request: InsightRequest):
         raise HTTPException(status_code=500, detail=f"Failed to parse Gemini response: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
-
-  
-
-
