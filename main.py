@@ -137,7 +137,7 @@ async def get_insights(request: InsightRequest):
     """
 
     # Corrected API endpoint using gemini-1.5-flash and dynamic key injection
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=AQ.Ab8RN6KcXYvqcd8h0aVpXuteeIqT_3if_SvTeP8VdXzdr7zmRQ"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=AQ.Ab8RN6JQ5vAaMIsf9yn_5CGCKfIaVFheyl1QmCc80liU0aiexw"
 
     try:
         response = requests.post(
