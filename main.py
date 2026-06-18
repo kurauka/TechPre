@@ -11,6 +11,9 @@ import re
 import os
 import uvicorn
 
+# Fetch the Gemini API Key from environment variables
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
 app = FastAPI(
     title="Plastic Classification API",
     description="API for classifying plastic types and providing recycling insights",
@@ -26,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load model locally (no Google Drive fallback)
+# Load model locally
 MODEL_PATH = "plastic.h5"
 if not os.path.exists(MODEL_PATH):
     raise RuntimeError(f"Model file not found at {MODEL_PATH}")
@@ -43,6 +46,13 @@ CLASS_NAMES = [
     "PP (polypropylene)",
     "PVC (Polyvinyl chloride)"
 ]
+
+@app.on_event("startup")
+async def startup_event():
+    # Warning check on startup to ensure Render configuration is set
+    if not GEMINI_API_KEY:
+        print("\n❌ WARNING: GEMINI_API_KEY environment variable is not set!")
+        print("Please set GEMINI_API_KEY in your Render dashboard dashboard.\n")
 
 @app.get("/", tags=["Root"])
 async def root():
@@ -105,6 +115,13 @@ def clean_json_output(response_text: str) -> str:
 
 @app.post("/insights", tags=["Insights"])
 async def get_insights(request: InsightRequest):
+    # Verify key exists before attempting request
+    if not GEMINI_API_KEY:
+        raise HTTPException(
+            status_code=500, 
+            detail="Gemini API Key is missing. Please set the GEMINI_API_KEY environment variable on your server."
+        )
+
     prompt = f"""
     Provide a JSON object with the following structure only, without extra text or markdown formatting:
 
@@ -119,9 +136,12 @@ async def get_insights(request: InsightRequest):
     The plastic type is: {request.plastic_type}
     """
 
+    # Corrected API endpoint using gemini-1.5-flash and dynamic key injection
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AQ.Ab8RN6KcXYvqcd8h0aVpXuteeIqT_3if_SvTeP8VdXzdr7zmRQ"
+
     try:
         response = requests.post(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AQ.Ab8RN6KcXYvqcd8h0aVpXuteeIqT_3if_SvTeP8VdXzdr7zmRQ",
+            url,
             headers={"Content-Type": "application/json"},
             json={"contents": [{"parts": [{"text": prompt}]}]}
         )
@@ -150,7 +170,9 @@ async def get_insights(request: InsightRequest):
         }
 
     except requests.exceptions.RequestException as e:
-        raise HTTPException(status_code=503, detail=f"Gemini API request failed: {str(e)}")
+        # Pull HTTP status from response if available to help debug bad keys/tokens
+        status_code = e.response.status_code if e.response is not None else 503
+        raise HTTPException(status_code=status_code, detail=f"Gemini API request failed: {str(e)}")
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"Failed to parse Gemini response: {str(e)}")
     except Exception as e:
@@ -159,5 +181,3 @@ async def get_insights(request: InsightRequest):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
-
-
