@@ -9,6 +9,7 @@ import requests
 import json
 import re
 import os
+import time
 import uvicorn
 
 # Fetch the Gemini API Key from environment variables
@@ -49,10 +50,8 @@ CLASS_NAMES = [
 
 @app.on_event("startup")
 async def startup_event():
-    # Warning check on startup to ensure Render configuration is set
     if not GEMINI_API_KEY:
         print("\n❌ WARNING: GEMINI_API_KEY environment variable is not set!")
-        print("Please set GEMINI_API_KEY in your Render dashboard dashboard.\n")
 
 @app.get("/", tags=["Root"])
 async def root():
@@ -115,7 +114,6 @@ def clean_json_output(response_text: str) -> str:
 
 @app.post("/insights", tags=["Insights"])
 async def get_insights(request: InsightRequest):
-    # Verify key exists before attempting request
     if not GEMINI_API_KEY:
         raise HTTPException(
             status_code=500, 
@@ -136,18 +134,39 @@ async def get_insights(request: InsightRequest):
     The plastic type is: {request.plastic_type}
     """
 
-    # Corrected API endpoint using gemini-1.5-flash and dynamic key injection
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=AQ.Ab8RN6JQ5vAaMIsf9yn_5CGCKfIaVFheyl1QmCc80liU0aiexw"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AQ.Ab8RN6JQ5vAaMIsf9yn_5CGCKfIaVFheyl1QmCc80liU0aiexw"
+
+    # Retry logic configuration
+    max_retries = 3
+    delay = 1.5  # Initial pause duration in seconds
+
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(
+                url,
+                headers={"Content-Type": "application/json"},
+                json={"contents": [{"parts": [{"text": prompt}]}]}
+            )
+            
+            # Handle rate-limiting gracefully by waiting and retrying
+            if response.status_code == 429:
+                if attempt < max_retries - 1:
+                    time.sleep(delay)
+                    delay *= 2  # Double the wait time for the next round
+                    continue
+            
+            response.raise_for_status()
+            gemini_data = response.json()
+            break  # Break out of the loop if successful
+
+        except requests.exceptions.RequestException as e:
+            if attempt == max_retries - 1:
+                status_code = e.response.status_code if e.response is not None else 503
+                if status_code == 429:
+                    raise HTTPException(status_code=429, detail="The server is busy. Gemini API rate limit exceeded. Please try again in a moment.")
+                raise HTTPException(status_code=status_code, detail=f"Gemini API request failed: {str(e)}")
 
     try:
-        response = requests.post(
-            url,
-            headers={"Content-Type": "application/json"},
-            json={"contents": [{"parts": [{"text": prompt}]}]}
-        )
-        response.raise_for_status()
-        gemini_data = response.json()
-
         if "candidates" not in gemini_data:
             raise HTTPException(status_code=500, detail="Gemini API did not return a valid response")
 
@@ -168,11 +187,6 @@ async def get_insights(request: InsightRequest):
                 <ul>{"".join(f"<li>{alt}</li>" for alt in structured.get("Alternatives", []))}</ul>
             """
         }
-
-    except requests.exceptions.RequestException as e:
-        # Pull HTTP status from response if available to help debug bad keys/tokens
-        status_code = e.response.status_code if e.response is not None else 503
-        raise HTTPException(status_code=status_code, detail=f"Gemini API request failed: {str(e)}")
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"Failed to parse Gemini response: {str(e)}")
     except Exception as e:
