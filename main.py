@@ -121,7 +121,7 @@ async def get_insights(request: InsightRequest):
 
     try:
         response = requests.post(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=AIzaSyDPz8gb_yPZm0oaBVuOnhMJrmL-dG7JBOk",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent?key=AIzaSyDPz8gb_yPZm0oaBVuOnhMJrmL-dG7JBOk",
             headers={"Content-Type": "application/json"},
             json={"contents": [{"parts": [{"text": prompt}]}]}
         )
