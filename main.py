@@ -12,7 +12,7 @@ import os
 import time
 import uvicorn
 
-# Fetch the Gemini API Key from environment variables
+# Fetch the Gemini API Key from environment variables safely
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 app = FastAPI(
@@ -52,6 +52,7 @@ CLASS_NAMES = [
 async def startup_event():
     if not GEMINI_API_KEY:
         print("\n❌ WARNING: GEMINI_API_KEY environment variable is not set!")
+        print("Please configure your AIzaSy... key in Render's Environment settings.\n")
 
 @app.get("/", tags=["Root"])
 async def root():
@@ -134,11 +135,13 @@ async def get_insights(request: InsightRequest):
     The plastic type is: {request.plastic_type}
     """
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AQ.Ab8RN6JQ5vAaMIsf9yn_5CGCKfIaVFheyl1QmCc80liU0aiexw"
+    # FIX: Dynamically inject the key variable instead of hardcoding the broken 'AQ.' string
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 
     # Retry logic configuration
     max_retries = 3
     delay = 1.5  # Initial pause duration in seconds
+    gemini_data = None
 
     for attempt in range(max_retries):
         try:
@@ -152,12 +155,12 @@ async def get_insights(request: InsightRequest):
             if response.status_code == 429:
                 if attempt < max_retries - 1:
                     time.sleep(delay)
-                    delay *= 2  # Double the wait time for the next round
+                    delay *= 2  
                     continue
             
             response.raise_for_status()
             gemini_data = response.json()
-            break  # Break out of the loop if successful
+            break  
 
         except requests.exceptions.RequestException as e:
             if attempt == max_retries - 1:
@@ -167,7 +170,7 @@ async def get_insights(request: InsightRequest):
                 raise HTTPException(status_code=status_code, detail=f"Gemini API request failed: {str(e)}")
 
     try:
-        if "candidates" not in gemini_data:
+        if not gemini_data or "candidates" not in gemini_data:
             raise HTTPException(status_code=500, detail="Gemini API did not return a valid response")
 
         raw_output = gemini_data['candidates'][0]['content']['parts'][0]['text']
