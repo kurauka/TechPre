@@ -136,7 +136,7 @@ async def get_insights(request: InsightRequest):
     """
 
     # FIX: Dynamically inject the key variable instead of hardcoding the broken 'AQ.' string
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={GEMINI_API_KEY}"
 
     # Retry logic configuration
     max_retries = 3
